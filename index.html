@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simon Game</title>
+  <style>
+    /* Base styling */
+    body {
+      background-color: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: white; /* Default text color */
+    }
+
+    .game-container {
+      position: relative;
+      width: 400px;
+      height: 400px;
+    }
+
+    .controls {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 50%;
+      width: 150px;
+      height: 150px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 2;
+    }
+
+    /* Make sure the count is visible on the white background */
+    .count {
+      font-size: 2.5em;
+      margin: 0;
+      color: #333;
+    }
+
+    .button {
+      width: 180px;
+      height: 180px;
+      position: absolute;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s, filter 0.2s;
+    }
+
+    .button:active {
+      opacity: 1;
+    }
+
+    /* Define colors and positions */
+    #green {
+      background-color: #00a74a;
+      border-radius: 200px 0 0 0;
+      top: 0;
+      left: 0;
+    }
+
+    #red {
+      background-color: #9f0f17;
+      border-radius: 0 200px 0 0;
+      top: 0;
+      right: 0;
+    }
+
+    #yellow {
+      background-color: #cca707;
+      border-radius: 0 0 0 200px;
+      bottom: 0;
+      left: 0;
+    }
+
+    #blue {
+      background-color: #094a8f;
+      border-radius: 0 0 200px 0;
+      bottom: 0;
+      right: 0;
+    }
+
+    .active {
+      opacity: 1;
+      filter: brightness(1.2);
+    }
+
+    button {
+      margin: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <!-- Simon game color buttons -->
+    <div class="button" id="green"></div>
+    <div class="button" id="red"></div>
+    <div class="button" id="yellow"></div>
+    <div class="button" id="blue"></div>
+    
+    <!-- Game controls and display -->
+    <div class="controls">
+      <h1 class="count">--</h1>
+      <button id="start">Start</button>
+      <button id="strict">Strict: OFF</button>
+    </div>
+  </div>
+  
+  <script>
+    class SimonGame {
+      constructor() {
+        // Game state variables
+        this.sequence = [];
+        this.userInput = [];
+        this.step = 0;
+        this.strictMode = false;
+        this.userInputActive = false; // flag to control user input availability
+
+        // Load audio for each button
+        this.sounds = [
+          new Audio('https://cdn.freecodecamp.org/curriculum/take-home-projects/simonSound1.mp3'),
+          new Audio('https://cdn.freecodecamp.org/curriculum/take-home-projects/simonSound2.mp3'),
+          new Audio('https://cdn.freecodecamp.org/curriculum/take-home-projects/simonSound3.mp3'),
+          new Audio('https://cdn.freecodecamp.org/curriculum/take-home-projects/simonSound4.mp3')
+        ];
+        
+        this.init();
+      }
+      
+      // Initialize event listeners
+      init() {
+        document.getElementById('start').addEventListener('click', () => this.startGame());
+        document.getElementById('strict').addEventListener('click', () => this.toggleStrict());
+        document.querySelectorAll('.button').forEach((btn, index) => {
+          btn.addEventListener('click', () => this.handleInput(index));
+        });
+      }
+      
+      // Helper function: returns a promise that resolves after ms milliseconds
+      delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+      
+      // Start a new game: reset state and play the first sequence
+      async startGame() {
+        this.sequence = [Math.floor(Math.random() * 4)];
+        this.step = 0;
+        this.userInput = [];
+        this.updateDisplay('--');
+        await this.playSequence();
+      }
+      
+      // Plays the current sequence asynchronously
+      async playSequence() {
+        this.disableInput();
+        for (let i = 0; i <= this.step; i++) {
+          await this.delay(800);
+          this.highlightButton(this.sequence[i]);
+        }
+        this.enableInput();
+      }
+      
+      // Highlight the button with the given index and play its sound
+      highlightButton(index) {
+        const button = document.querySelectorAll('.button')[index];
+        button.classList.add('active');
+        // Restart sound if already playing
+        this.sounds[index].currentTime = 0;
+        this.sounds[index].play();
+        setTimeout(() => button.classList.remove('active'), 300);
+      }
+      
+      // Handle user's button press
+      async handleInput(index) {
+        if (!this.userInputActive) return;
+        this.highlightButton(index);
+        this.userInput.push(index);
+        
+        // Check if the current input is correct
+        if (index !== this.sequence[this.userInput.length - 1]) {
+          return this.handleWrongInput();
+        }
+        
+        // If the complete sequence is correctly input
+        if (this.userInput.length === this.step + 1) {
+          // Check win condition (20 rounds)
+          if (this.step === 19) {
+            return this.handleWin();
+          }
+          // Proceed to next round: add a new step
+          this.step++;
+          this.sequence.push(Math.floor(Math.random() * 4));
+          this.userInput = [];
+          this.updateDisplay(this.step + 1);
+          await this.delay(1000);
+          this.playSequence();
+        }
+      }
+      
+      // Handle a wrong input by the user
+      async handleWrongInput() {
+        // Stop all sounds and reset audio position
+        this.sounds.forEach(sound => {
+          sound.pause();
+          sound.currentTime = 0;
+        });
+        this.updateDisplay('!!');
+        this.userInput = [];
+        this.disableInput();
+        await this.delay(1000);
+        // In strict mode, restart the game; otherwise, replay the current sequence
+        if (this.strictMode) {
+          this.startGame();
+        } else {
+          this.updateDisplay(this.step + 1);
+          this.playSequence();
+        }
+      }
+      
+      // Handle the win condition
+      handleWin() {
+        this.updateDisplay('WIN');
+        setTimeout(() => this.startGame(), 2000);
+      }
+      
+      // Toggle strict mode on/off
+      toggleStrict() {
+        this.strictMode = !this.strictMode;
+        document.getElementById('strict').textContent = 
+          `Strict: ${this.strictMode ? 'ON' : 'OFF'}`;
+      }
+      
+      // Update the central display
+      updateDisplay(text) {
+        document.querySelector('.count').textContent = text;
+      }
+      
+      // Disable user input during sequence playback
+      disableInput() {
+        this.userInputActive = false;
+      }
+      
+      // Enable user input when it's time to play
+      enableInput() {
+        this.userInputActive = true;
+      }
+    }
+    
+    // Initialize the Simon Game when the page loads
+    new SimonGame();
+  </script>
+</body>
+</html>
